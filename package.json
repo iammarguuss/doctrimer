@@ -1,0 +1,37 @@
+{
+  "name": "doctrimer",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon --watch src src/app.js",
+    "test:reader": "node tests/test_reader_v1.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iammarguuss/doctrimer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/iammarguuss/doctrimer/issues"
+  },
+  "homepage": "https://github.com/iammarguuss/doctrimer#readme",
+  "description": "",
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "chokidar": "^4.0.3",
+    "dotenv": "^17.2.3",
+    "ollama": "^0.6.0",
+    "pdf-parse": "^2.4.5",
+    "sharp": "^0.34.4",
+    "sqlite-vec": "^0.1.7-alpha.2",
+    "tesseract.js": "^6.0.1",
+    "uuid": "^13.0.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

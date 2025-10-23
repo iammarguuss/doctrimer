@@ -1,0 +1,6 @@
+node_modules
+.env
+data/objects
+data/by-index
+data/*.db
+samples
