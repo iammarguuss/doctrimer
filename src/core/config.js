@@ -4,6 +4,7 @@ export const config = {
   ollamaHost: process.env.OLLAMA_HOST || 'http://127.0.0.1:11434',
   visionModel: process.env.VISION_MODEL || 'qwen2.5vl:7b',
   embedModel: process.env.EMBED_MODEL || 'all-minilm',
+  textModel: process.env.TEXT_MODEL || 'qwen2.5:7b',
   sqlitePath: process.env.SQLITE_PATH || './data/doctrimer.db',
   dirs: {
     inbox: process.env.INBOX_DIR || './data/inbox',

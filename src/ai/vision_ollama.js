@@ -1,8 +1,8 @@
 import { Ollama } from 'ollama';
 import fs from 'node:fs/promises';
+import sharp from 'sharp';
 import { config } from '../core/config.js';
 import { docSchema } from '../schema/doc_schema.js';
-import { reportSchema } from '../schema/report_schema.js';
 
 const ollama = new Ollama({ host: config.ollamaHost });
 
@@ -18,6 +18,25 @@ export async function ensureVisionModel() {
   }
 }
 
+// ------- утилиты -------
+
+function withTimeout(promise, ms, label = 'timeout') {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label)), ms);
+    promise.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+
+async function imageToBase64Jpeg(imagePath) {
+  // лёгкая препроцессинг-компрессия, чтобы VLM не зависала на огромных фото
+  const buf = await sharp(imagePath)
+    .rotate()
+    .resize(1600, 1600, { fit: 'inside', fastShrinkOnLoad: true })
+    .jpeg({ quality: 85, mozjpeg: true })
+    .toBuffer();
+  return buf.toString('base64');
+}
+
 function normStr(v) {
   return (v ?? '').toString().trim().replace(/\s+/g, ' ');
 }
@@ -28,9 +47,7 @@ function majorityVote(arr) {
   }
   let best = ''; let bestN = 0;
   for (const [k, n] of counts.entries()) {
-    if (n > bestN || (n === bestN && k.length > best.length)) {
-      best = k; bestN = n;
-    }
+    if (n > bestN || (n === bestN && k.length > best.length)) { best = k; bestN = n; }
   }
   return best || (arr.find(Boolean) ?? '');
 }
@@ -41,73 +58,89 @@ function mergeTexts(texts) {
     const lines = (t || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     for (const ln of lines) {
       const key = ln.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push(ln);
-      }
+      if (!seen.has(key)) { seen.add(key); out.push(ln); }
     }
   }
-  // Плюс цельный абзац, если коротко
   return out.join('\n');
 }
 
+function normalizeEntities(parsed) {
+  const e = {};
+  const sources = [];
+  if (parsed && typeof parsed === 'object') {
+    if (parsed.entities && typeof parsed.entities === 'object') sources.push(parsed.entities);
+    if (parsed.fields && typeof parsed.fields === 'object') sources.push(parsed.fields);
+    if (parsed.key_fields && typeof parsed.key_fields === 'object') sources.push(parsed.key_fields);
+  }
+  for (const src of sources) {
+    for (const [k, v] of Object.entries(src)) {
+      const val = v == null ? '' : String(v).trim();
+      if (val) e[k] = val;
+    }
+  }
+  return e;
+}
+
+// ------- основное -------
+
 /**
- * Один проход: классифицирует изображение документа и достаёт ключевые поля.
- * Возвращает объект по docSchema.
+ * Один проход по изображению: строго JSON по docSchema.
+ * Возвращает уже нормализованный объект (entities/summary/extracted_text).
  */
-export async function classifyFromImage(imagePath) {
-  const img = await fs.readFile(imagePath);
-  const b64 = img.toString('base64');
+export async function classifyFromImage(imagePath, opts = {}) {
+  const timeoutMs = Number(opts.timeoutMs ?? config.visionTimeoutMs ?? 60000);
+  const b64 = await imageToBase64Jpeg(imagePath);
 
   const system = [
-    'Ты — извлекатель структурированной информации из сканов/фото документов.',
-    'Определи тип документа и верни только JSON по заданной схеме.',
-    'Если уверенности мало — используй doc_type="unknown".',
-    'Не добавляй никаких комментариев, только JSON.'
+    'Ты — извлекатель структурированной информации из фото/сканов документов.',
+    'Верни ТОЛЬКО JSON по указанной схеме (docSchema).',
+    'Если уверенности мало — doc_type="unknown".',
+    'Обязательно заполни extracted_text кратким OCR-подобным текстом (до 5000 символов), если он читается.',
+    'Поля клади в "entities"; не используй "fields" или "key_fields".'
   ].join(' ');
 
-  const resp = await ollama.chat({
+  const req = ollama.chat({
     model: config.visionModel,
     stream: false,
     format: docSchema,
     messages: [
       { role: 'system', content: system },
-      {
-        role: 'user',
-        content: 'Определи тип и извлеки ключевые поля (если есть). Верни только JSON.',
-        images: [b64]
-      }
+      { role: 'user', content: 'Определи тип документа, извлеки ключевые поля в "entities" и добавь extracted_text. Только JSON.', images: [b64] }
     ],
-    options: { temperature: 0.2 }
+    options: { temperature: 0.1 }
   });
 
+  const resp = await withTimeout(req, timeoutMs, 'VLM classify timeout');
   const raw = resp?.message?.content?.trim() || '{}';
+
   let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
+  try { parsed = JSON.parse(raw); }
+  catch {
     parsed = { doc_type: 'unknown', confidence: 0, summary: 'Failed to parse JSON', raw };
   }
-  return { version: '1.0', ...parsed };
+
+  // нормализация
+  const entities = normalizeEntities(parsed);
+  const extracted_text = parsed.extracted_text || parsed.text || '';
+  const language = parsed.language || parsed.lang || '';
+  const summary = parsed.summary || '';
+
+  return { version: '1.0', ...parsed, entities, extracted_text, language, summary };
 }
 
-/**
- * Несколько проходов с ансамблированием (по умолчанию 3).
- * Возвращает { runs: [...], aggregated: {...} }.
- */
-export async function classifyImageMultiple(imagePath, passes = 3) {
+/** Мультипроход (по умолчанию 3) */
+export async function classifyImageMultiple(imagePath, passes = 3, opts = {}) {
   const runs = [];
   for (let i = 0; i < passes; i++) {
-    const r = await classifyFromImage(imagePath);
+    // можно варьировать seed, но многие VLM игнорируют; оставим константный темп и таймаут
+    const r = await classifyFromImage(imagePath, opts);
     runs.push(r);
   }
   const aggregated = aggregateRuns(runs);
   return { runs, aggregated };
 }
 
-/**
- * Агрегирует несколько прогонов модели.
- */
+/** Аггрегация нескольких прогонов */
 export function aggregateRuns(runs) {
   const docTypes = runs.map(r => r.doc_type).filter(Boolean);
   const languages = runs.map(r => r.language).filter(Boolean);
@@ -116,18 +149,17 @@ export function aggregateRuns(runs) {
 
   const allKeys = new Set();
   for (const r of runs) {
-    if (r.entities && typeof r.entities === 'object') {
-      Object.keys(r.entities).forEach(k => allKeys.add(k));
-    }
-  }
-  const entities = {};
-  for (const key of allKeys) {
-    const vals = runs.map(r => r.entities?.[key]).filter(Boolean);
-    if (!vals.length) continue;
-    entities[key] = majorityVote(vals);
+    const ent = normalizeEntities(r);
+    Object.keys(ent).forEach(k => allKeys.add(k));
   }
 
-  const aggregated = {
+  const entities = {};
+  for (const key of allKeys) {
+    const vals = runs.map(r => normalizeEntities(r)[key]).filter(Boolean);
+    if (vals.length) entities[key] = majorityVote(vals);
+  }
+
+  return {
     version: '1.0',
     doc_type: majorityVote(docTypes) || 'unknown',
     language: majorityVote(languages) || '',
@@ -136,46 +168,4 @@ export function aggregateRuns(runs) {
     extracted_text: mergeTexts(texts),
     entities
   };
-  return aggregated;
-}
-
-/**
- * Построить финальный отчёт с помощью модели по изображению и агрегированным данным.
- * Возвращает JSON по reportSchema.
- */
-export async function buildStructuredReport(imagePath, aggregated) {
-  const img = await fs.readFile(imagePath);
-  const b64 = img.toString('base64');
-
-  const system = [
-    'Ты — аналитик документов.',
-    'Вход: изображение документа и предварительно агрегированные извлечения.',
-    'Задача: вернуть только JSON по заданной схеме reportSchema:',
-    'doc_type, language, confidence (оценка 0..1), summary, key_points[], important_fields[], entities{...}, index_terms[].',
-    'index_terms — короткие ключевые слова/имена для поиска.'
-  ].join(' ');
-
-  const userContent = [
-    'Вот агрегированные извлечения:',
-    JSON.stringify(aggregated, null, 2),
-    'На основе изображения и этих данных верни ТОЛЬКО JSON отчёта.'
-  ].join('\n');
-
-  const resp = await ollama.chat({
-    model: config.visionModel,
-    stream: false,
-    format: reportSchema,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: userContent, images: [b64] }
-    ],
-    options: { temperature: 0.1 }
-  });
-
-  const raw = resp?.message?.content?.trim() || '{}';
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return { doc_type: aggregated.doc_type || 'unknown', summary: 'Failed to parse JSON', entities: {}, raw };
-  }
 }

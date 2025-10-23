@@ -7,23 +7,8 @@ export const docSchema = {
     confidence: { type: 'number' },
     summary: { type: 'string' },
     extracted_text: { type: 'string' },
-    entities: {
-      type: 'object',
-      properties: {
-        merchant: { type: 'string' },
-        date: { type: 'string' },
-        total: { type: 'string' },
-        currency: { type: 'string' },
-        items: { type: 'array', items: { type: 'string' } },
-        full_name: { type: 'string' },
-        id_number: { type: 'string' },
-        birth_date: { type: 'string' },
-        expiry_date: { type: 'string' },
-        issuing_country: { type: 'string' }
-      },
-      additionalProperties: true
-    }
+    entities: { type: 'object', additionalProperties: true }
   },
-  required: ['doc_type', 'confidence'],
-  additionalProperties: true
+  required: ['doc_type', 'confidence', 'language', 'summary', 'extracted_text', 'entities'],
+  additionalProperties: false
 };

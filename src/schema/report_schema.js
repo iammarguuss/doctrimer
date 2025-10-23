@@ -9,7 +9,8 @@ export const reportSchema = {
     key_points: { type: 'array', items: { type: 'string' } },
     important_fields: { type: 'array', items: { type: 'string' } },
     entities: { type: 'object', additionalProperties: true },
-    index_terms: { type: 'array', items: { type: 'string' } }
+    index_terms: { type: 'array', items: { type: 'string' } },
+    tags: { type: 'array', items: { type: 'string' } }
   },
   required: ['doc_type', 'summary', 'entities'],
   additionalProperties: true

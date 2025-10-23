@@ -37,16 +37,11 @@ async function main() {
     process.exit(2);
   }
 
-  // Эмбеддинг-модель
-  try { await ensureEmbedModel(); } catch (e) { console.warn('[warn]', e.message); }
-
-  // 3 прохода + агрегация
+  // 3 прохода + отчёт + эмбеддинг
   const { runs, aggregated } = await classifyImageMultiple(imagePath, 3);
-
-  // Отчёт модели на базе агрегата
   const report = await buildStructuredReport(imagePath, aggregated);
 
-  // Текст для индекса: агрегированный текст + сводка + entities
+  await ensureEmbedModel().catch(() => {});
   const indexText = [
     aggregated.summary || '',
     aggregated.extracted_text || '',
@@ -62,17 +57,10 @@ async function main() {
       embed_model: process.env.EMBED_MODEL || 'all-minilm',
       embedding_dim: dim
     },
-    ensemble: {
-      runs,
-      vote: aggregated
-    },
+    ensemble: { runs, vote: aggregated },
     report,
     text_dump: aggregated.extracted_text,
-    embedding: {
-      model: process.env.EMBED_MODEL || 'all-minilm',
-      dim,
-      vector
-    }
+    embedding: { model: process.env.EMBED_MODEL || 'all-minilm', dim, vector }
   };
 
   console.log('=== ENSEMBLE REPORT (JSON) ===\n', JSON.stringify(final, null, 2));
