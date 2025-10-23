@@ -1,7 +1,6 @@
 // Запуск: node tests/test_reader_v1.js ./path/to/image.jpg [--model qwen2.5vl:7b]
 import { Ollama } from 'ollama';
 import fs from 'node:fs/promises';
-import path from 'node:path';
 
 const args = process.argv.slice(2);
 if (!args[0]) {
@@ -62,7 +61,7 @@ async function main() {
   const resp = await ollama.chat({
     model,
     stream: false,
-    format: schema, // structured outputs
+    format: schema,
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: 'Определи тип документа и извлеки ключевые поля. Только JSON.', images: [b64] }

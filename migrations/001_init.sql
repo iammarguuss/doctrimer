@@ -12,5 +12,3 @@ CREATE TABLE IF NOT EXISTS documents (
   text TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
-/* см. initVectorIndex для таблиц эмбеддингов */

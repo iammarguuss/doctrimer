@@ -7,7 +7,7 @@ import { processSingleFile } from './pipeline/process_file.js';
 import { ensureVisionModel } from './ai/vision_ollama.js';
 
 async function main() {
-  await ensureVisionModel(); // проверим наличие модели (подскажет pull при отсутствии)
+  await ensureVisionModel();
   const db = openDb();
   runMigrations(db);
   initVectorIndex(db);
@@ -18,7 +18,7 @@ async function main() {
     // TODO: сохранить в БД + дублировать файлы под индексными именами
   });
 
-  log.info('doctrimer запущен. Смотри:', config.dirs.inbox);
+  log.info('doctrimer запущен. Смотри папку:', config.dirs.inbox);
 }
 
 main().catch(e => {

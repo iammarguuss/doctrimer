@@ -1,5 +1,4 @@
-import * as sqliteVec from 'sqlite-vec'; // загружает SQL-функции/VT
-// Документация: загрузка расширения и работа через better-sqlite3. :contentReference[oaicite:16]{index=16}
+import * as sqliteVec from 'sqlite-vec';
 
 export function initVectorIndex(db) {
   sqliteVec.load(db);
@@ -17,7 +16,7 @@ export function initVectorIndex(db) {
     CREATE VIRTUAL TABLE IF NOT EXISTS doc_embeddings
     USING vec0(
       id TEXT PRIMARY KEY,
-      embedding float[384]      -- размер зависит от выбранной модели
+      embedding float[384]
     );
   `);
 }

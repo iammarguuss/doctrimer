@@ -3,4 +3,8 @@ node_modules
 data/objects
 data/by-index
 data/*.db
+dist
+*.log
 samples
+*.pdf
+*.jpg

@@ -1,4 +1,3 @@
-// JSON Schema для structured outputs (Ollama "format")
 export const docSchema = {
   type: 'object',
   properties: {
@@ -11,13 +10,11 @@ export const docSchema = {
     entities: {
       type: 'object',
       properties: {
-        // для чеков
         merchant: { type: 'string' },
         date: { type: 'string' },
         total: { type: 'string' },
         currency: { type: 'string' },
         items: { type: 'array', items: { type: 'string' } },
-        // для ID
         full_name: { type: 'string' },
         id_number: { type: 'string' },
         birth_date: { type: 'string' },
