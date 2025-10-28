@@ -3,8 +3,7 @@ node_modules
 data/objects
 data/by-index
 data/*.db
+data/derived
 dist
 *.log
 samples
-*.pdf
-*.jpg

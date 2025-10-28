@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import { config } from '../src/core/config.js';
 import { classifyImageMultiple, buildStructuredReport } from '../src/ai/vision_ollama.js';
 import { embedText, ensureEmbedModel } from '../src/ai/embed_ollama.js';
+import { normalizeDocType } from '../src/utils/normalize.js';
 
 const args = process.argv.slice(2);
 if (!args[0]) {
@@ -18,7 +19,6 @@ const host = process.env.OLLAMA_HOST || config.ollamaHost;
 const ollama = new Ollama({ host });
 
 async function main() {
-  // Проверка Ollama
   try {
     const r = await fetch(`${host}/api/version`);
     if (!r.ok) throw new Error('Ollama /api/version недоступен');
@@ -29,25 +29,41 @@ async function main() {
     process.exit(2);
   }
 
-  // Проверка модели
   const list = await ollama.list();
-  const present = list.models.some(m => m.name === model);
+  const present = list.models.some(m => (m.name === model) || (m.name?.startsWith(model + ':')));
   if (!present) {
     console.error(`Модель ${model} не найдена локально. Выполни: ollama pull ${model}`);
     process.exit(2);
   }
 
-  // 3 прохода + отчёт + эмбеддинг
+  // 3 прохода + агрегат
   const { runs, aggregated } = await classifyImageMultiple(imagePath, 3);
-  const report = await buildStructuredReport(imagePath, aggregated);
+  let vote = { ...aggregated };
 
-  await ensureEmbedModel().catch(() => {});
+  // Отчёт модели на базе агрегата
+  const report = await buildStructuredReport(imagePath, vote);
+
+  // Если doc_type неизвестен — подмешаем из отчёта
+  if (!vote.doc_type || vote.doc_type === 'unknown') {
+    vote.doc_type = normalizeDocType(report.doc_type || 'unknown');
+  }
+
+  // Индексируемый текст
   const indexText = [
-    aggregated.summary || '',
-    aggregated.extracted_text || '',
-    JSON.stringify(aggregated.entities || {}, null, 0)
+    vote.summary || '',
+    vote.extracted_text || '',
+    JSON.stringify(vote.entities || {}, null, 0)
   ].join('\n');
-  const { vector, dim } = await embedText(indexText).catch(() => ({ vector: [], dim: 0 }));
+
+  // Эмбеддинг
+  let vector = []; let dim = 0;
+  try {
+    await ensureEmbedModel();
+    const emb = await embedText(indexText);
+    vector = emb.vector; dim = emb.dim;
+  } catch (e) {
+    console.warn('[warn] Embedding unavailable:', e.message);
+  }
 
   const final = {
     meta: {
@@ -57,9 +73,9 @@ async function main() {
       embed_model: process.env.EMBED_MODEL || 'all-minilm',
       embedding_dim: dim
     },
-    ensemble: { runs, vote: aggregated },
+    ensemble: { runs, vote },
     report,
-    text_dump: aggregated.extracted_text,
+    text_dump: vote.extracted_text,
     embedding: { model: process.env.EMBED_MODEL || 'all-minilm', dim, vector }
   };
 

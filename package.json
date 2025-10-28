@@ -1,22 +1,20 @@
 {
   "name": "doctrimer",
-  "version": "0.1.0",
+  "version": "0.2.1-slimpdf",
   "type": "module",
   "main": "src/app.js",
   "scripts": {
-  "start": "node src/app.js",
-  "dev": "nodemon --watch src src/app.js",
-  "test:reader": "node tests/test_reader_v1.js",
-  "test:reader3": "node tests/test_reader_v2_three_pass.js",
-  "test:pdf": "node tests/test_reader_pdf_v1.js",
-  "test:universal": "node tests/test_reader_universal_v1.js"
-},
+    "start": "node src/app.js",
+    "dev": "nodemon --watch src src/app.js",
+    "test:pipeline": "node tests/test_reader_v5_pipeline.js",
+    "test:api": "node tests/test_reader_v4_api.js"
+  },
   "dependencies": {
+    "@hyzyla/pdfium": "^2.1.9",
     "better-sqlite3": "^10.0.0",
     "chokidar": "^3.6.0",
     "dotenv": "^16.4.5",
     "ollama": "^0.6.0",
-    "pdf-parse": "^2.4.5",
     "sharp": "^0.33.5",
     "sqlite-vec": "^0.1.7-alpha.2",
     "tesseract.js": "^5.0.5",
@@ -25,20 +23,5 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.7"
-  },
-  "description": "Локальный пайплайн для приёма сканов/изображений, понимания документа (VLM), извлечения ключевых полей, индексации и поиска.",
-  "directories": {
-    "test": "tests"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/iammarguuss/doctrimer.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/iammarguuss/doctrimer/issues"
-  },
-  "homepage": "https://github.com/iammarguuss/doctrimer#readme"
+  }
 }

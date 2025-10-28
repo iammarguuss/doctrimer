@@ -1,64 +1,30 @@
-# doctrimer (v0)
+# doctrimer (v0.2.0)
 
-Локальный пайплайн для приёма сканов/изображений, понимания документа (VLM), извлечения ключевых полей, индексации и поиска.
+Документ-пайплайн с локальной VLM (через Ollama). Поддержка PDF→JPG **без системных утилит** (Puppeteer + pdfjs-dist).
 
-## Стек
-- **Ollama** (локальные модели: vision `qwen2.5vl`, `llava`; эмбеддинги `all-minilm`/`nomic-embed-text`)
-- **Node.js** (ESM), **chokidar**, **sharp**, **pdf-parse**, **tesseract.js**
-- **SQLite** + **sqlite-vec** для векторного поиска
-- Минимальный тест `tests/test_reader_v1.js` для подачи изображения в локальную VLM
-
-## Быстрый старт
-
-1) Установи [Ollama](https://ollama.com/), запусти сервис и вытяни модель:
-```bash
-ollama pull qwen2.5vl:7b
-# альтернативно:
-# ollama pull llava:13b
-```
-
-2) Подготовь проект:
+## Установка
 ```bash
 cp .env.example .env
 npm install
+ollama pull qwen2.5vl:7b
+ollama pull all-minilm
 ```
 
-3) Проверка тестом (подай путь к картинке/скану):
+## Тесты
 ```bash
-npm run test:reader -- ./samples/your_image.jpg
+# v5: общий конвейер: любой файл -> toJpg -> analyzeImages
+npm run test:pipeline -- ./samples/your.pdf --pages 2 --passes 3 --engine puppeteer
+
+# v4: готовый API analyzeDocument (без отдельного toJpg)
+npm run test:api -- ./samples/your.jpg --passes 3
+
+# v3: прежний тест (pdf/img)
+npm run test:reader3 -- ./samples/your.pdf --pages 2 --passes 3
 ```
 
-4) Запуск приложения (инбокс‑ватчер):
-```bash
-npm run dev
-# положи файл в data/inbox и смотри логи
-```
+### PDF→JPG (без системных зависимостей)
+По умолчанию используется **Puppeteer + pdfjs-dist**. Это npm‑зависимость, которая скачает Chromium и будет работать одинаково на Windows/macOS/Linux.
+Альтернативно можно `npm i pdf-img-convert` (JS‑движок). `pdf2pic` **не нужен** (он требует ImageMagick).
 
-> Примечания
-> - Для structured outputs задаём `format` со схемой JSON (см. `src/ai/vision_ollama.js`).
-> - В первой версии обработчик файлов работает с изображениями. Поддержку PDF+OCR добавим в следующих итерациях.
-> - `sqlite-vec` инициализируется в `src/db/vector_index.js`.
+Выбор движка: флаг `--engine puppeteer|pdf-img-convert|pdf2pic|auto` в `test:pipeline` (по умолчанию `puppeteer`).
 
-## Структура
-
-```
-data/
-  inbox/      # входящие файлы
-  objects/    # хранилище «объектов» по стабильным id
-  by-index/   # дубли под индексными именами
-migrations/   # SQL миграции
-src/
-  app.js
-  ai/
-  core/
-  db/
-  ingest/
-  pipeline/
-  schema/
-  utils/
-tests/
-  test_reader_v1.js
-```
-
-## Лицензия
-MIT (по умолчанию, можно сменить).
